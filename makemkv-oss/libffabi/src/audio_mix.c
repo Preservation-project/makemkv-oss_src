@@ -71,8 +71,8 @@ FFM_AudioMix* __cdecl ffm_audio_mix_alloc(void* logctx,uint64_t in_channel_layou
 
     am->in_layout    = in_channel_layout;
     am->out_layout   = out_channel_layout;
-    am->in_channels  = av_get_channel_layout_nb_channels(in_channel_layout);
-    am->out_channels = av_get_channel_layout_nb_channels(out_channel_layout);
+    am->in_channels  = ff_get_channel_layout_nb_channels(in_channel_layout);
+    am->out_channels = ff_get_channel_layout_nb_channels(out_channel_layout);
 
     {
         double *matrix_dbl = av_mallocz(am->out_channels * am->in_channels *
@@ -341,10 +341,10 @@ static int ff_audio_mix_set_matrix(FFM_AudioMix *am, const double *matrix, int s
         CONVERT_MATRIX(q30, av_clipl_int32(llrint(1073741824.0 * v)))
     }
 
-    av_get_channel_layout_string(in_layout_name, sizeof(in_layout_name),
-                                 am->in_channels, am->in_layout);
-    av_get_channel_layout_string(out_layout_name, sizeof(out_layout_name),
-                                 am->out_channels, am->out_layout);
+    ffm_get_channel_layout_string(in_layout_name, sizeof(in_layout_name),
+                                 am->in_layout);
+    ffm_get_channel_layout_string(out_layout_name, sizeof(out_layout_name),
+                                 am->out_layout);
     av_log(&flog, AV_LOG_DEBUG, "audio_mix: %s to %s\n",
            in_layout_name, out_layout_name);
     av_log(&flog, AV_LOG_DEBUG, "matrix size: %d x %d\n",

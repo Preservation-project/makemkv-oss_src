@@ -91,6 +91,10 @@ typedef struct _FFM_CodecInfo {
     uint8_t         sample_formats[16];
 } ALIGN_PACKED FFM_CodecInfo;
 
+#define FFM_CODEC_INFO_NAME_MAX_LENGTH      32
+#define FFM_CODEC_INFO_EXMARK_LENGTH        8
+#define FFM_CODEC_INFO_EXMARK_MAGIC         "FABImark"
+
 typedef struct _FFM_AudioEncodeInfo {
     const uint8_t*  extradata;
     uint32_t        extradata_size;

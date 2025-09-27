@@ -2229,6 +2229,60 @@ rm -f conftest.val
 
 } # ac_fn_c_compute_int
 
+# ac_fn_c_check_type LINENO TYPE VAR INCLUDES
+# -------------------------------------------
+# Tests whether TYPE exists after having included INCLUDES, setting cache
+# variable VAR accordingly.
+ac_fn_c_check_type ()
+{
+  as_lineno=${as_lineno-"$1"} as_lineno_stack=as_lineno_stack=$as_lineno_stack
+  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for $2" >&5
+$as_echo_n "checking for $2... " >&6; }
+if eval \${$3+:} false; then :
+  $as_echo_n "(cached) " >&6
+else
+  eval "$3=no"
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+$4
+int
+main ()
+{
+if (sizeof ($2))
+	 return 0;
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+$4
+int
+main ()
+{
+if (sizeof (($2)))
+	    return 0;
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_compile "$LINENO"; then :
+
+else
+  eval "$3=yes"
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
+fi
+eval ac_res=\$$3
+	       { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_res" >&5
+$as_echo "$ac_res" >&6; }
+  eval $as_lineno_stack; ${as_lineno_stack:+:} unset as_lineno
+
+} # ac_fn_c_check_type
+
 # ac_fn_c_check_member LINENO AGGR MEMBER VAR INCLUDES
 # ----------------------------------------------------
 # Tries to find if the field MEMBER exists in type AGGR, after including
@@ -2285,60 +2339,6 @@ $as_echo "$ac_res" >&6; }
   eval $as_lineno_stack; ${as_lineno_stack:+:} unset as_lineno
 
 } # ac_fn_c_check_member
-
-# ac_fn_c_check_type LINENO TYPE VAR INCLUDES
-# -------------------------------------------
-# Tests whether TYPE exists after having included INCLUDES, setting cache
-# variable VAR accordingly.
-ac_fn_c_check_type ()
-{
-  as_lineno=${as_lineno-"$1"} as_lineno_stack=as_lineno_stack=$as_lineno_stack
-  { $as_echo "$as_me:${as_lineno-$LINENO}: checking for $2" >&5
-$as_echo_n "checking for $2... " >&6; }
-if eval \${$3+:} false; then :
-  $as_echo_n "(cached) " >&6
-else
-  eval "$3=no"
-  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-$4
-int
-main ()
-{
-if (sizeof ($2))
-	 return 0;
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_compile "$LINENO"; then :
-  cat confdefs.h - <<_ACEOF >conftest.$ac_ext
-/* end confdefs.h.  */
-$4
-int
-main ()
-{
-if (sizeof (($2)))
-	    return 0;
-  ;
-  return 0;
-}
-_ACEOF
-if ac_fn_c_try_compile "$LINENO"; then :
-
-else
-  eval "$3=yes"
-fi
-rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
-fi
-rm -f core conftest.err conftest.$ac_objext conftest.$ac_ext
-fi
-eval ac_res=\$$3
-	       { $as_echo "$as_me:${as_lineno-$LINENO}: result: $ac_res" >&5
-$as_echo "$ac_res" >&6; }
-  eval $as_lineno_stack; ${as_lineno_stack:+:} unset as_lineno
-
-} # ac_fn_c_check_type
 cat >config.log <<_ACEOF
 This file contains any messages produced by compilers while
 running configure, to aid debugging if configure makes a mistake.
@@ -17217,6 +17217,9 @@ fi
 { $as_echo "$as_me:${as_lineno-$LINENO}: result: $LIBAVCODEC_VERSION_MAJOR" >&5
 $as_echo "$LIBAVCODEC_VERSION_MAJOR" >&6; }
 
+if test $LIBAVCODEC_VERSION_MAJOR -lt 55; then
+  as_fn_error $? "The libavcodec library is too old. Please get a recent one from http://www.ffmpeg.org" "$LINENO" 5
+fi
 
 # avcodec_send_frame (new API)
 ac_fn_c_check_decl "$LINENO" "avcodec_send_frame" "ac_cv_have_decl_avcodec_send_frame" "#include <libavcodec/avcodec.h>
@@ -17227,134 +17230,33 @@ if test "x$ac_cv_have_decl_avcodec_send_frame" = xyes; then :
 $as_echo "#define FFABI_HAVE_AVCODEC_SEND_FRAME 1" >>confdefs.h
 
 
-  # channels missing in libav
-  ac_fn_c_check_member "$LINENO" "AVFrame" "channels" "ac_cv_member_AVFrame_channels" "#include <libavcodec/avcodec.h>
-"
-if test "x$ac_cv_member_AVFrame_channels" = xyes; then :
-
-
-$as_echo "#define FFABI_HAVE_AV_FRAME_CHANNELS 1" >>confdefs.h
-
-
-fi
-
-
-
 else
 
-
-  # avcodec_encode_audio2 (old API)
-  ac_fn_c_check_func "$LINENO" "avcodec_encode_audio2" "ac_cv_func_avcodec_encode_audio2"
-if test "x$ac_cv_func_avcodec_encode_audio2" = xyes; then :
-
-else
-
-    LIBAVCODEC_VERSION_MAJOR=0;
+  { $as_echo "$as_me:${as_lineno-$LINENO}: result: failed" >&5
+$as_echo "failed" >&6; }
+  { { $as_echo "$as_me:${as_lineno-$LINENO}: error: in \`$ac_pwd':" >&5
+$as_echo "$as_me: error: in \`$ac_pwd':" >&2;}
+as_fn_error $? "LIBAVCODEC version is too old, need avcodec_send_frame support
+See \`config.log' for more details" "$LINENO" 5; }
 
 fi
 
 
-  # check for ancient frame format
-  ac_fn_c_check_member "$LINENO" "AVFrame" "nb_samples" "ac_cv_member_AVFrame_nb_samples" "#include <libavcodec/avcodec.h>
-"
-if test "x$ac_cv_member_AVFrame_nb_samples" = xyes; then :
-
-else
-
-    LIBAVCODEC_VERSION_MAJOR=0;
-
-fi
-
-
-  # we need planar audio
-  ac_fn_c_check_decl "$LINENO" "AV_SAMPLE_FMT_U8P" "ac_cv_have_decl_AV_SAMPLE_FMT_U8P" "#include <libavutil/samplefmt.h>
-"
-if test "x$ac_cv_have_decl_AV_SAMPLE_FMT_U8P" = xyes; then :
-
-else
-
-    LIBAVCODEC_VERSION_MAJOR=0;
-
-fi
-
-
-  # check ffmpeg features for old API
-
-  ac_fn_c_check_member "$LINENO" "AVCodecContext" "refcounted_frames" "ac_cv_member_AVCodecContext_refcounted_frames" "#include <libavcodec/avcodec.h>
-"
-if test "x$ac_cv_member_AVCodecContext_refcounted_frames" = xyes; then :
-
-
-$as_echo "#define FFABI_HAVE_REFCOUNTED_FRAMES 1" >>confdefs.h
-
-
-fi
-
-
-  ac_fn_c_check_decl "$LINENO" "avcodec_free_frame" "ac_cv_have_decl_avcodec_free_frame" "#include <libavcodec/avcodec.h>
-"
-if test "x$ac_cv_have_decl_avcodec_free_frame" = xyes; then :
-
-
-$as_echo "#define FFABI_HAVE_AVCODEC_FREE_FRAME 1" >>confdefs.h
-
-
-fi
-
-
-  ac_fn_c_check_decl "$LINENO" "av_frame_free" "ac_cv_have_decl_av_frame_free" "#include <libavutil/frame.h>
-"
-if test "x$ac_cv_have_decl_av_frame_free" = xyes; then :
-
-
-$as_echo "#define FFABI_HAVE_AV_FRAME_FREE 1" >>confdefs.h
-
-
-fi
-
-
-  ac_fn_c_check_decl "$LINENO" "av_frame_get_channels" "ac_cv_have_decl_av_frame_get_channels" "#include <libavcodec/avcodec.h>
-"
-if test "x$ac_cv_have_decl_av_frame_get_channels" = xyes; then :
-
-
-$as_echo "#define FFABI_HAVE_AV_FRAME_CHANNELS 1" >>confdefs.h
-
-
-fi
-
-
-  ac_fn_c_check_decl "$LINENO" "av_frame_get_sample_rate" "ac_cv_have_decl_av_frame_get_sample_rate" "#include <libavcodec/avcodec.h>
-"
-if test "x$ac_cv_have_decl_av_frame_get_sample_rate" = xyes; then :
-
-
-$as_echo "#define FFABI_HAVE_AV_FRAME_SAMPLE_RATE 1" >>confdefs.h
-
-
-fi
-
-
-  ac_fn_c_check_decl "$LINENO" "av_frame_set_channel_layout" "ac_cv_have_decl_av_frame_set_channel_layout" "#include <libavcodec/avcodec.h>
-"
-if test "x$ac_cv_have_decl_av_frame_set_channel_layout" = xyes; then :
-
-
-$as_echo "#define FFABI_HAVE_AV_FRAME_CHANNEL_LAYOUT 1" >>confdefs.h
-
-
-fi
-
-
-
-fi
-
-
-if test $LIBAVCODEC_VERSION_MAJOR -lt 53; then
-  as_fn_error $? "The libavcodec library is too old. Please get a recent one from http://www.ffmpeg.org" "$LINENO" 5
-fi
 
 # check various ffmpeg features
+
+ac_fn_c_check_type "$LINENO" "struct AVChannelLayout" "ac_cv_type_struct_AVChannelLayout" "#include <libavcodec/avcodec.h>
+"
+if test "x$ac_cv_type_struct_AVChannelLayout" = xyes; then :
+
+else
+
+
+$as_echo "#define FFABI_HAVE_OLD_CHANNEL_LAYOUT 1" >>confdefs.h
+
+
+fi
+
 
 ac_fn_c_check_func "$LINENO" "av_log_format_line" "ac_cv_func_av_log_format_line"
 if test "x$ac_cv_func_av_log_format_line" = xyes; then :
@@ -17366,71 +17268,12 @@ $as_echo "#define FFABI_HAVE_AV_LOG_FORMAT_LINE 1" >>confdefs.h
 fi
 
 
-ac_fn_c_check_type "$LINENO" "enum AVCodecID" "ac_cv_type_enum_AVCodecID" "#include <libavcodec/avcodec.h>
-"
-if test "x$ac_cv_type_enum_AVCodecID" = xyes; then :
-
-
-$as_echo "#define FFABI_HAVE_AVCODECID 1" >>confdefs.h
-
-
-else
-
-  ac_fn_c_check_type "$LINENO" "enum CodecID" "ac_cv_type_enum_CodecID" "#include <libavcodec/avcodec.h>
-"
-if test "x$ac_cv_type_enum_CodecID" = xyes; then :
-
-else
-
-    as_fn_error $? "Neither AVCodecID nor CodecID defined in libavcodec.h" "$LINENO" 5
-
-fi
-
-
-fi
-
-
-ac_fn_c_check_decl "$LINENO" "AV_CODEC_ID_NONE" "ac_cv_have_decl_AV_CODEC_ID_NONE" "#include <libavcodec/avcodec.h>
-"
-if test "x$ac_cv_have_decl_AV_CODEC_ID_NONE" = xyes; then :
-
-
-$as_echo "#define FFABI_HAVE_AV_CODEC_ID_NAMES 1" >>confdefs.h
-
-
-else
-
-  ac_fn_c_check_decl "$LINENO" "CODEC_ID_NONE" "ac_cv_have_decl_CODEC_ID_NONE" "#include <libavcodec/avcodec.h>
-"
-if test "x$ac_cv_have_decl_CODEC_ID_NONE" = xyes; then :
-
-else
-
-    as_fn_error $? "Neither AV_CODEC_ID_XXX nor CODEC_ID_XXX defined in libavcodec.h" "$LINENO" 5
-
-fi
-
-
-fi
-
-
 ac_fn_c_check_member "$LINENO" "AVCodecParserContext" "duration" "ac_cv_member_AVCodecParserContext_duration" "#include <libavcodec/avcodec.h>
 "
 if test "x$ac_cv_member_AVCodecParserContext_duration" = xyes; then :
 
 
 $as_echo "#define FFABI_HAVE_PARSER_DURATION 1" >>confdefs.h
-
-
-fi
-
-
-ac_fn_c_check_decl "$LINENO" "AV_CH_TOP_BACK_CENTER" "ac_cv_have_decl_AV_CH_TOP_BACK_CENTER" "#include <libavutil/channel_layout.h>
-"
-if test "x$ac_cv_have_decl_AV_CH_TOP_BACK_CENTER" = xyes; then :
-
-
-$as_echo "#define FFABI_HAVE_AVUTIL_CHANNEL_LAYOUT_H 1" >>confdefs.h
 
 
 fi

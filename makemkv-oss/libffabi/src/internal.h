@@ -24,6 +24,7 @@
 #include <libavutil/samplefmt.h>
 #include <libavutil/mem.h>
 #include <libavutil/log.h>
+#include <libavutil/channel_layout.h>
 #include <libavcodec/avcodec.h>
 #include <libavcodec/version.h>
 
@@ -56,45 +57,21 @@ void *ffabi_realloc(void *ptr, size_t size);
 void ffabi_free(void *ptr);
 
 
-#if (LIBAVCODEC_VERSION_MAJOR < 53)
-#error "Can't use an ancient ffmpeg or libav"
+#if (LIBAVCODEC_VERSION_MAJOR < 55)
+#error "Can't use an ancient ffmpeg"
 #endif
 
 #include "ffabicfg.h"
-
-#ifndef AV_CODEC_FLAG_GLOBAL_HEADER
-#define AV_CODEC_FLAG_GLOBAL_HEADER CODEC_FLAG_GLOBAL_HEADER
-#endif
-
-#ifndef FFABI_HAVE_AVCODEC_SEND_FRAME
-
-#define FFABI_AVCODEC_OLD_API 1
-
-#ifndef FFABI_HAVE_AVCODECID
-#define AVCodecID CodecID
-#endif
-
-#ifndef FFABI_HAVE_AV_CODEC_ID_NAMES
-#define AV_CODEC_ID_NONE CODEC_ID_NONE
-#define AV_CODEC_ID_MLP CODEC_ID_MLP
-#define AV_CODEC_ID_TRUEHD CODEC_ID_TRUEHD
-#endif
-
-#ifndef FFABI_HAVE_REFCOUNTED_FRAMES
-static inline void av_frame_unref(AVFrame *frame)
-{
-}
-#endif
-
-#endif // FFABI_AVCODEC_OLD_API
 
 #ifndef FFABI_HAVE_AV_LOG_FORMAT_LINE
 void av_log_format_line(void *ptr, int level, const char *fmt, va_list vl,
                         char *line, int line_size, int *print_prefix);
 #endif
 
-#ifdef FFABI_HAVE_AVUTIL_CHANNEL_LAYOUT_H
-#include <libavutil/channel_layout.h>
-#endif
+static int ff_get_channel_layout_nb_channels(uint64_t channel_layout)
+{
+    return av_popcount64(channel_layout);
+}
+
 
 #endif /* FFABI_INTERNAL_H */

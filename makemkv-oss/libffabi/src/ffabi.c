@@ -100,30 +100,6 @@ uint64_t __cdecl ffm_avcodec_version3(void)
     return (((uint64_t)flags)<<32) | version | 0x80000000;
 }
 
-#ifdef FFABI_AVCODEC_OLD_API
-
-static inline AVFrame *ffm_frame_alloc(void)
-{
-#ifdef FFABI_HAVE_AV_FRAME_FREE
-    return av_frame_alloc();
-#else
-    return avcodec_alloc_frame();
-#endif
-}
-
-static inline void ffm_frame_free(AVFrame **frame)
-{
-#if defined(FFABI_HAVE_AV_FRAME_FREE)
-    av_frame_free(frame);
-#elif defined(FFABI_HAVE_AVCODEC_FREE_FRAME)
-    avcodec_free_frame(frame);
-#else
-    av_freep(frame);
-#endif
-}
-
-#endif
-
 static enum AVSampleFormat translate_sample_fmt(FFM_AudioFormat fmt)
 {
     enum AVSampleFormat r;
@@ -162,12 +138,9 @@ struct _FFM_AudioDecodeContext
     AVCodec*                codec;
     AVCodecContext*         avctx;
     AVFrame*                frame;
+    AVPacket*               pck;
     unsigned int            nb_samples;
-#ifdef FFABI_AVCODEC_OLD_API
-    int                     have_frame;
-#else
     int                     eos;
-#endif
 };
 
 FFM_AudioDecodeContext* __cdecl ffm_audio_decode_init(void* logctx,const char* name,FFM_AudioFormat fmt,const char* argp[],const uint8_t* CodecData,unsigned int CodecDataSize,unsigned int time_base,unsigned int CodecFlags)
@@ -181,7 +154,7 @@ FFM_AudioDecodeContext* __cdecl ffm_audio_decode_init(void* logctx,const char* n
         return NULL;
     }
 
-    ctx->codec = avcodec_find_decoder_by_name(name);
+    ctx->codec = (AVCodec*) avcodec_find_decoder_by_name(name);
     if (!ctx->codec) {
         ffm_audio_decode_close(ctx);
         return NULL;
@@ -195,9 +168,6 @@ FFM_AudioDecodeContext* __cdecl ffm_audio_decode_init(void* logctx,const char* n
     ctx->avctx->opaque = logctx;
     ctx->avctx->time_base.num = 1;
     ctx->avctx->time_base.den = time_base;
-#if defined(FFABI_HAVE_REFCOUNTED_FRAMES) && defined(FFABI_AVCODEC_OLD_API)
-    ctx->avctx->refcounted_frames = 1;
-#endif
 
     if (CodecData) {
         ctx->avctx->extradata = (uint8_t*) CodecData;
@@ -219,13 +189,15 @@ FFM_AudioDecodeContext* __cdecl ffm_audio_decode_init(void* logctx,const char* n
     }
     av_dict_free(&opts);
 
-#ifdef FFABI_AVCODEC_OLD_API
-    ctx->frame = ffm_frame_alloc();
-#else
     ctx->frame = av_frame_alloc();
-#endif
 
     if (!ctx->frame) {
+        ffm_audio_decode_close(ctx);
+        return NULL;
+    }
+
+    ctx->pck = av_packet_alloc();
+    if (!ctx->pck) {
         ffm_audio_decode_close(ctx);
         return NULL;
     }
@@ -235,14 +207,8 @@ FFM_AudioDecodeContext* __cdecl ffm_audio_decode_init(void* logctx,const char* n
 
 int __cdecl ffm_audio_decode_close(FFM_AudioDecodeContext* ctx)
 {
-    if (ctx->frame) {
-#ifdef FFABI_AVCODEC_OLD_API
-        av_frame_unref(ctx->frame);
-        ffm_frame_free(&ctx->frame);
-#else
-        av_frame_free(&ctx->frame);
-#endif
-    }
+    av_frame_free(&ctx->frame);
+    av_packet_free(&ctx->pck);
 
     if (ctx->avctx) {
         avcodec_close(ctx->avctx);
@@ -263,81 +229,22 @@ static int av_cold ffmerr(uint8_t type,unsigned int value)
     return (int)(int32_t)v;
 }
 
-
-#ifdef FFABI_AVCODEC_OLD_API
-
-int __cdecl ffm_audio_decode_put_data(FFM_AudioDecodeContext* ctx,const uint8_t* data,unsigned int size,int64_t pts)
-{
-    int                 r=-1;
-    struct AVPacket     avpkt;
-
-    av_init_packet(&avpkt);
-    avpkt.pts = pts;
-    avpkt.dts = pts;
-    avpkt.data = (uint8_t*)data;
-    avpkt.size = size;
-
-    av_frame_unref(ctx->frame);
-    ctx->have_frame = 0;
-
-    r = avcodec_decode_audio4(ctx->avctx,ctx->frame,&ctx->have_frame,&avpkt);
-    if (r != size) { return ffmerr(0,r); }
-
-    if (ctx->have_frame) {
-#ifdef FFABI_HAVE_AV_FRAME_CHANNELS
-        if (av_frame_get_channels(ctx->frame) != ctx->avctx->channels) { return ffmerr(1,av_frame_get_channels(ctx->frame)); }
-#endif
-#ifdef FFABI_HAVE_AV_FRAME_SAMPLE_RATE
-        if (av_frame_get_sample_rate(ctx->frame) != ctx->avctx->sample_rate) { return ffmerr(2,av_frame_get_sample_rate(ctx->frame)); }
-#endif
-        if (ctx->frame->format != ctx->avctx->sample_fmt) { return ffmerr(3,ctx->frame->format); }
-        if (ctx->nb_samples) {
-            if (ctx->nb_samples < ctx->frame->nb_samples) { return ffmerr(5,ctx->frame->nb_samples); }
-        } else {
-            ctx->nb_samples = ctx->frame->nb_samples;
-        }
-    }
-
-    return 0;
-}
-
-int __cdecl ffm_audio_decode_get_frame(FFM_AudioDecodeContext* ctx,int64_t* pts,const uint8_t* data[])
-{
-    int i;
-
-    if (!ctx->have_frame) { return 0; }
-
-    ctx->have_frame = 0;
-
-    *pts = ctx->frame->pts;
-
-    data[0]=ctx->frame->data[0];
-
-    if (av_sample_fmt_is_planar(ctx->avctx->sample_fmt)) {
-        for (i=1;i<ctx->avctx->channels;i++) {
-            data[i] = ctx->frame->data[i];
-        }
-    }
-
-    return ctx->frame->nb_samples;
-}
-
-#else // FFABI_AVCODEC_OLD_API
-
 int __cdecl ffm_audio_decode_put_data(FFM_AudioDecodeContext* ctx,const uint8_t* data,unsigned int size,int64_t pts)
 {
     int r;
 
     if (NULL!=data) {
-        struct AVPacket     avpkt;
 
-        av_init_packet(&avpkt);
-        avpkt.pts = pts;
-        avpkt.dts = pts;
-        avpkt.data = (uint8_t*)data;
-        avpkt.size = size;
+        AVPacket* avpkt = ctx->pck;
 
-        r = avcodec_send_packet(ctx->avctx,&avpkt);
+        av_packet_unref(avpkt);
+
+        avpkt->pts = pts;
+        avpkt->dts = pts;
+        avpkt->data = (uint8_t*)data;
+        avpkt->size = size;
+
+        r = avcodec_send_packet(ctx->avctx,avpkt);
     } else {
         if (!ctx->eos) {
             r = avcodec_send_packet(ctx->avctx,NULL);
@@ -351,7 +258,7 @@ int __cdecl ffm_audio_decode_put_data(FFM_AudioDecodeContext* ctx,const uint8_t*
 
 int __cdecl ffm_audio_decode_get_frame(FFM_AudioDecodeContext* ctx,int64_t* pts,const uint8_t* data[])
 {
-    int r,i;
+    int r,i,channels;
 
     av_frame_unref(ctx->frame);
 
@@ -360,8 +267,12 @@ int __cdecl ffm_audio_decode_get_frame(FFM_AudioDecodeContext* ctx,int64_t* pts,
     if ( (r==AVERROR_EOF) || (r==AVERROR(EAGAIN)) ) return 0;
     if (r!=0) return r;
 
-#ifdef FFABI_HAVE_AV_FRAME_CHANNELS
-    if (ctx->frame->channels != ctx->avctx->channels) { return ffmerr(1,ctx->frame->channels); }
+#ifdef FFABI_HAVE_OLD_CHANNEL_LAYOUT
+    channels = ctx->avctx->channels;
+    if (ctx->frame->channels != channels) { return ffmerr(1,ctx->frame->channels); }
+#else
+    channels = ctx->avctx->ch_layout.nb_channels;
+    if (ctx->frame->ch_layout.nb_channels != channels) { return ffmerr(1, ctx->frame->ch_layout.nb_channels); }
 #endif
     if (ctx->frame->sample_rate != ctx->avctx->sample_rate) { return ffmerr(2,ctx->frame->sample_rate); }
     if (ctx->frame->format != ctx->avctx->sample_fmt) { return ffmerr(3,ctx->frame->format); }
@@ -376,7 +287,7 @@ int __cdecl ffm_audio_decode_get_frame(FFM_AudioDecodeContext* ctx,int64_t* pts,
     data[0]=ctx->frame->data[0];
 
     if (av_sample_fmt_is_planar(ctx->avctx->sample_fmt)) {
-        for (i=1;i<ctx->avctx->channels;i++) {
+        for (i=1;i<channels;i++) {
             data[i] = ctx->frame->extended_data[i];
         }
     }
@@ -384,13 +295,16 @@ int __cdecl ffm_audio_decode_get_frame(FFM_AudioDecodeContext* ctx,int64_t* pts,
     return ctx->frame->nb_samples;
 }
 
-#endif
-
 int __cdecl ffm_audio_decode_get_info(FFM_AudioDecodeContext* ctx,FFM_AudioInfo* info)
 {
     info->sample_rate = ctx->avctx->sample_rate;
+#ifdef FFABI_HAVE_OLD_CHANNEL_LAYOUT
     info->channels = ctx->avctx->channels;
     info->channel_layout = ctx->avctx->channel_layout;
+#else
+    info->channels = ctx->avctx->ch_layout.nb_channels;
+    info->channel_layout = (AV_CHANNEL_ORDER_NATIVE == ctx->avctx->ch_layout.order) ? ctx->avctx->ch_layout.u.mask : 0;
+#endif
     info->frame_size = ctx->nb_samples;
     info->sample_fmt = back_translate_sample_fmt(ctx->avctx->sample_fmt);
     info->bits_per_sample = ctx->avctx->bits_per_raw_sample;
@@ -403,13 +317,9 @@ struct _FFM_AudioEncodeContext
     AVCodec*                codec;
     AVCodecContext*         avctx;
     AVFrame*                frame;
-    AVPacket                pck;
-#ifdef FFABI_AVCODEC_OLD_API
-    int                     have_packet;
-#else
+    AVPacket*               pck;
     uint8_t**               frame_extended_data;
     int                     eos;
-#endif
 };
 
 
@@ -424,11 +334,13 @@ FFM_AudioEncodeContext* __cdecl ffm_audio_encode_init(void* logctx,const char* n
         return NULL;
     }
 
-    av_init_packet(&ctx->pck);
-    ctx->pck.data=NULL;
-    ctx->pck.size=0;
+    ctx->pck = av_packet_alloc();
+    if (!ctx->pck) {
+        ffm_audio_encode_close(ctx);
+        return NULL;
+    }
 
-    ctx->codec = avcodec_find_encoder_by_name(name);
+    ctx->codec = (AVCodec*) avcodec_find_encoder_by_name(name);
     if (!ctx->codec) {
         ffm_audio_encode_close(ctx);
         return NULL;
@@ -439,18 +351,28 @@ FFM_AudioEncodeContext* __cdecl ffm_audio_encode_init(void* logctx,const char* n
         ffm_audio_encode_close(ctx);
         return NULL;
     }
-#if defined(FFABI_AVCODEC_OLD_API) && defined(FFABI_HAVE_REFCOUNTED_FRAMES)
-    ctx->avctx->refcounted_frames = 1;
-#endif
     ctx->avctx->opaque = logctx;
     ctx->avctx->time_base.num = 1;
     ctx->avctx->time_base.den = time_base;
 
     ctx->avctx->sample_fmt = translate_sample_fmt(fmt);
     ctx->avctx->sample_rate = info->sample_rate;
-    ctx->avctx->channels = info->channels;
     ctx->avctx->bits_per_raw_sample = info->bits_per_sample;
+
+#ifdef FFABI_HAVE_OLD_CHANNEL_LAYOUT
+    ctx->avctx->channels = info->channels;
     ctx->avctx->channel_layout = info->channel_layout;
+#else
+    if (av_channel_layout_from_mask(&ctx->avctx->ch_layout, info->channel_layout)) {
+        ffm_audio_encode_close(ctx);
+        return NULL;
+    }
+    if (ctx->avctx->ch_layout.nb_channels != info->channels) {
+        ffm_audio_encode_close(ctx);
+        return NULL;
+    }
+#endif
+
     ctx->avctx->profile = (info->profile != FFM_PROFILE_UNKNOWN) ?
         info->profile : FF_PROFILE_UNKNOWN;
 
@@ -473,19 +395,15 @@ FFM_AudioEncodeContext* __cdecl ffm_audio_encode_init(void* logctx,const char* n
     info->frame_size = ctx->avctx->frame_size;
     info->profile = ctx->avctx->profile;
 
-#ifdef FFABI_AVCODEC_OLD_API
-    ctx->frame = ffm_frame_alloc();
-#else
     ctx->frame = av_frame_alloc();
     if (av_sample_fmt_is_planar(ctx->avctx->sample_fmt)) {
-        ctx->frame_extended_data = av_mallocz_array(ctx->avctx->channels,
+        ctx->frame_extended_data = av_calloc(info->channels,
             sizeof(*ctx->frame_extended_data));
         if (!ctx->frame_extended_data) {
             ffm_audio_encode_close(ctx);
             return NULL;
         }
     }
-#endif
 
     if (!ctx->frame) {
         ffm_audio_encode_close(ctx);
@@ -497,18 +415,9 @@ FFM_AudioEncodeContext* __cdecl ffm_audio_encode_init(void* logctx,const char* n
 
 int __cdecl ffm_audio_encode_close(FFM_AudioEncodeContext* ctx)
 {
-#ifdef FFABI_AVCODEC_OLD_API
-    av_free_packet(&ctx->pck);
-
-    if (ctx->frame) {
-        av_frame_unref(ctx->frame);
-        ffm_frame_free(&ctx->frame);
-    }
-#else
-    av_packet_unref(&ctx->pck);
+    av_packet_free(&ctx->pck);
     av_frame_free(&ctx->frame);
     av_freep(&ctx->frame_extended_data);
-#endif
 
     if (ctx->avctx) {
         avcodec_close(ctx->avctx);
@@ -519,66 +428,6 @@ int __cdecl ffm_audio_encode_close(FFM_AudioEncodeContext* ctx)
 
     return 0;
 }
-
-#ifdef FFABI_AVCODEC_OLD_API
-
-int __cdecl ffm_audio_encode_put_frame(FFM_AudioEncodeContext* ctx,const uint8_t* frame_data[],unsigned int frame_size,unsigned int nb_samples,uint64_t pts)
-{
-    AVFrame* frame;
-
-    av_free_packet(&ctx->pck);
-    av_init_packet(&ctx->pck);
-    ctx->pck.data=NULL;
-    ctx->pck.size=0;
-    ctx->have_packet = 0;
-
-    av_frame_unref(ctx->frame);
-
-    if (frame_data) {
-        frame = ctx->frame;
-        frame->format = ctx->avctx->sample_fmt;
-#ifdef FFABI_HAVE_AV_FRAME_CHANNELS
-        av_frame_set_channels(frame,ctx->avctx->channels);
-#endif
-#ifdef FFABI_HAVE_AV_FRAME_CHANNEL_LAYOUT
-        av_frame_set_channel_layout(frame,ctx->avctx->channel_layout);
-#endif
-        frame->data[0] = (uint8_t*)frame_data[0];
-        frame->linesize[0] = frame_size;
-
-        if (av_sample_fmt_is_planar(ctx->avctx->sample_fmt)) {
-            int i;
-            for (i=1;i<ctx->avctx->channels;i++) {
-                frame->data[i] = (uint8_t*)frame_data[i];
-            }
-        }
-
-        frame->nb_samples = nb_samples;
-        frame->pts = pts;
-    } else {
-        frame = NULL;
-        if ((ctx->avctx->codec->capabilities&CODEC_CAP_DELAY)==0) {
-            return 0;
-        }
-    }
-
-    return avcodec_encode_audio2(ctx->avctx,&ctx->pck,frame,&ctx->have_packet);
-}
-
-int __cdecl ffm_audio_encode_get_data(FFM_AudioEncodeContext* ctx,unsigned int *size,int64_t *pts,const uint8_t** data)
-{
-    if (ctx->have_packet) {
-        ctx->have_packet = 0;
-        *size = ctx->pck.size;
-        *pts = ctx->pck.pts;
-        *data = ctx->pck.data;
-    } else {
-        *data = NULL;
-    }
-    return 0;
-}
-
-#else
 
 static void ffm_frame_clean(AVFrame* frame)
 {
@@ -591,14 +440,21 @@ static void ffm_frame_clean(AVFrame* frame)
 int __cdecl ffm_audio_encode_put_frame(FFM_AudioEncodeContext* ctx,const uint8_t* frame_data[],unsigned int frame_size,unsigned int nb_samples,uint64_t pts)
 {
     int r;
+    unsigned int channels;
 
     if (frame_data) {
 
         ctx->frame->format = ctx->avctx->sample_fmt;
-#ifdef FFABI_HAVE_AV_FRAME_CHANNELS
+
+#ifdef FFABI_HAVE_OLD_CHANNEL_LAYOUT
+        channels = ctx->avctx->channels;
         ctx->frame->channels = ctx->avctx->channels;
-#endif
         ctx->frame->channel_layout = ctx->avctx->channel_layout;
+#else
+        r = av_channel_layout_copy(&ctx->frame->ch_layout, &ctx->avctx->ch_layout);
+        if (!r) return r;
+        channels = ctx->avctx->ch_layout.nb_channels;
+#endif
         ctx->frame->nb_samples = nb_samples;
         ctx->frame->pts = pts;
         ctx->frame->linesize[0] = frame_size;
@@ -611,7 +467,7 @@ int __cdecl ffm_audio_encode_put_frame(FFM_AudioEncodeContext* ctx,const uint8_t
             ctx->frame->extended_data = ctx->frame_extended_data;
 
             ctx->frame->extended_data[0] = ctx->frame->data[0];
-            for (i=1;i<ctx->avctx->channels;i++) {
+            for (i=1;i<channels;i++) {
                 ctx->frame->extended_data[i] = (uint8_t*)frame_data[i];
                 if (i<AV_NUM_DATA_POINTERS) {
                     ctx->frame->data[i] = ctx->frame->extended_data[i];
@@ -642,9 +498,9 @@ int __cdecl ffm_audio_encode_get_data(FFM_AudioEncodeContext* ctx,unsigned int *
 {
     int r;
 
-    av_packet_unref(&ctx->pck);
+    av_packet_unref(ctx->pck);
 
-    r = avcodec_receive_packet(ctx->avctx,&ctx->pck);
+    r = avcodec_receive_packet(ctx->avctx,ctx->pck);
 
     if ( (r==AVERROR_EOF) || (r==AVERROR(EAGAIN)) ) {
         *data = NULL;
@@ -652,14 +508,12 @@ int __cdecl ffm_audio_encode_get_data(FFM_AudioEncodeContext* ctx,unsigned int *
     }
     if (r!=0) return r;
 
-    *size = ctx->pck.size;
-    *pts = ctx->pck.pts;
-    *data = ctx->pck.data;
+    *size = ctx->pck->size;
+    *pts = ctx->pck->pts;
+    *data = ctx->pck->data;
 
     return 0;
 }
-
-#endif
 
 int __cdecl ffm_audio_encode_get_info(FFM_AudioEncodeContext* ctx,FFM_AudioEncodeInfo* info)
 {
@@ -674,27 +528,78 @@ int __cdecl ffm_audio_encode_get_info(FFM_AudioEncodeContext* ctx,FFM_AudioEncod
     return 0;
 }
 
-int __cdecl ffm_audio_get_codec_information(FFM_CodecInfo* info,const char* name,int encode)
+#ifndef FFABI_HAVE_OLD_CHANNEL_LAYOUT
+static int set_codec_info_extended(FFM_CodecInfo* info, const AVCodec* codec)
+{
+    char* exinfo;
+    size_t len;
+    unsigned int count_ch_layouts_in = 0;
+    unsigned int count_ch_layouts_out = 0;
+    uint64_t*   channel_layouts;
+    unsigned int i;
+
+    len = strlen(codec->name);
+    if (len >= FFM_CODEC_INFO_NAME_MAX_LENGTH) return -1;
+
+    if (NULL != codec->ch_layouts) {
+        while (0 != codec->ch_layouts[count_ch_layouts_in].nb_channels)
+        {
+            count_ch_layouts_in++;
+        }
+    }
+
+    exinfo = (char*)ffabi_memalign(sizeof(uint64_t), (FFM_CODEC_INFO_NAME_MAX_LENGTH + FFM_CODEC_INFO_EXMARK_LENGTH + ((count_ch_layouts_in+1)*sizeof(uint64_t))));
+    if (NULL == exinfo) return -1;
+
+    memcpy(exinfo, codec->name, len + 1);
+    memcpy(exinfo + FFM_CODEC_INFO_NAME_MAX_LENGTH, FFM_CODEC_INFO_EXMARK_MAGIC, FFM_CODEC_INFO_EXMARK_LENGTH);
+    channel_layouts = (uint64_t*)(exinfo + FFM_CODEC_INFO_NAME_MAX_LENGTH + FFM_CODEC_INFO_EXMARK_LENGTH);
+
+    info->name = exinfo;
+    info->channel_layouts = channel_layouts;
+
+    for (i = 0; i < count_ch_layouts_in; i++)
+    {
+        if (AV_CHANNEL_ORDER_NATIVE != codec->ch_layouts[i].order) continue;
+        channel_layouts[count_ch_layouts_out++] = codec->ch_layouts[i].u.mask;
+    }
+    channel_layouts[count_ch_layouts_out] = 0;
+
+    return 0;
+}
+#endif
+
+int __cdecl ffm_audio_get_codec_information(FFM_CodecInfo* info, const char* name, int encode)
 {
     AVCodec* codec;
     int i;
 
-    memset(info,0,sizeof(*info));
+    memset(info, 0, sizeof(*info));
 
     if (encode) {
-        codec = avcodec_find_encoder_by_name(name);
+        codec = (AVCodec*) avcodec_find_encoder_by_name(name);
     } else {
-        codec = avcodec_find_decoder_by_name(name);
+        codec = (AVCodec*) avcodec_find_decoder_by_name(name);
     }
 
     if (!codec) {
-        return ffmerr(1,encode);
+        return ffmerr(1, encode);
     }
 
     info->name = codec->name;
     info->long_name = codec->long_name;
     info->sample_rates = codec->supported_samplerates;
+#ifdef FFABI_HAVE_OLD_CHANNEL_LAYOUT
     info->channel_layouts = codec->channel_layouts;
+#else
+    if (NULL == codec->ch_layouts) {
+        info->channel_layouts = NULL;
+    } else {
+        if (set_codec_info_extended(info, codec)) {
+            return ffmerr(2, 0);
+        }
+    }
+#endif
     info->id = codec->id;
     info->capabilities = codec->capabilities;
     if (codec->profiles) {
@@ -734,7 +639,7 @@ int __cdecl ffm_mlp_read_syncframe(const uint8_t* data,unsigned int size,FFM_Aud
     int                     err,outbuf_size,rest;
     uint8_t                 *outbuf;
 
-    codec = avcodec_find_decoder(AV_CODEC_ID_MLP);
+    codec = (AVCodec*)avcodec_find_decoder(AV_CODEC_ID_MLP);
     if (!codec) {
         err=ffmerr(1,0); goto ret;
     }
@@ -765,9 +670,15 @@ int __cdecl ffm_mlp_read_syncframe(const uint8_t* data,unsigned int size,FFM_Aud
     }
 
     info->sample_rate = avctx->sample_rate;
-    info->channels = avctx->channels;
     info->bits_per_sample = avctx->bits_per_raw_sample;
+#ifdef FFABI_HAVE_OLD_CHANNEL_LAYOUT
+    info->channels = avctx->channels;
     info->channel_layout = avctx->channel_layout;
+#else
+    info->channels = avctx->ch_layout.nb_channels;
+    info->channel_layout = (AV_CHANNEL_ORDER_NATIVE == avctx->ch_layout.order) ? avctx->ch_layout.u.mask : 0;
+#endif
+
     *bitrate = avctx->bit_rate;
 
 #ifndef FFABI_HAVE_PARSER_DURATION
@@ -839,7 +750,14 @@ int __cdecl ffm_mpa_decode_header(uint32_t hdr,FFM_AudioInfo* info,uint32_t* lay
 
 int __cdecl ffm_get_channel_layout_string(char *buf,int buf_size,uint64_t channel_layout)
 {
+#ifdef FFABI_HAVE_OLD_CHANNEL_LAYOUT
     av_get_channel_layout_string(buf,buf_size,-1,channel_layout);
+#else
+    AVChannelLayout ch_layout;
+
+    if (0!=av_channel_layout_from_mask(&ch_layout,channel_layout)) return -1;
+    av_channel_layout_describe(&ch_layout,buf,buf_size);
+#endif
     return 0;
 }
 

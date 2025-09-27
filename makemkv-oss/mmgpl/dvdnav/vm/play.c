@@ -163,9 +163,16 @@ link_t play_PGC_post(vm_t *vm) {
 }
 
 link_t play_PG(vm_t *vm) {
+    link_t link_exit = { Exit, 0, 0, 0 };
+
 #ifdef TRACE
   Log3(vm, "play_PG: (vm->state).pgN (%i)", (vm->state).pgN);
 #endif
+
+  if (0 == (vm->state).pgN) {
+      (vm->state).pgN = 1;
+      return link_exit;
+  }
 
   vassert((vm->state).pgN > 0);
   if((vm->state).pgN > (vm->state).pgc->nr_of_programs) {

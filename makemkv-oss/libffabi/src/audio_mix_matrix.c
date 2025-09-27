@@ -98,8 +98,8 @@ int ff_avresample_build_matrix(uint64_t in_layout, uint64_t out_layout,
 
     unaccounted = in_layout & ~out_layout;
 
-    in_channels  = av_get_channel_layout_nb_channels( in_layout);
-    out_channels = av_get_channel_layout_nb_channels(out_layout);
+    in_channels  = ff_get_channel_layout_nb_channels( in_layout);
+    out_channels = ff_get_channel_layout_nb_channels(out_layout);
 
     memset(matrix_out, 0, out_channels * stride * sizeof(*matrix_out));
 
