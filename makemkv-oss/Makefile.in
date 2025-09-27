@@ -113,12 +113,12 @@ out/makemkv.full: $(MAKEMKVGUI_GEN) $(MAKEMKVGUI_SRC_LINUX) tmp/gen_buildinfo.h
 
 out/mmccextr.full: $(MMCCX_SRC) tmp/gen_buildinfo.h
 	mkdir -p out
-	$(GCC) $(CFLAGS) $(MMCCEXTR_DEF) -DHAVE_BUILDINFO_H -Itmp -D_GNU_SOURCE -o$@ $(MMCCX_SRC) -lc \
+	$(GCC) $(CFLAGS) $(LDFLAGS) $(MMCCEXTR_DEF) -DHAVE_BUILDINFO_H -Itmp -D_GNU_SOURCE -o$@ $(MMCCX_SRC) -lc \
 	-ffunction-sections -Wl,--gc-sections -Wl,-z,defs
 
 out/mmgplsrv.full: $(MMGPL_SRC)
 	mkdir -p out
-	$(GCC) $(CFLAGS) $(INCF)$(MMGPL_INC) $(INCF)$(DVDNAV_INC) $(INCF)$(DVDREAD_INC) $(INCF)$(MAKEMKVGUI_INC) $(INCF)$(LIBMAKEMKV_INC) \
+	$(GCC) $(CFLAGS) $(LDFLAGS) $(INCF)$(MMGPL_INC) $(INCF)$(DVDNAV_INC) $(INCF)$(DVDREAD_INC) $(INCF)$(MAKEMKVGUI_INC) $(INCF)$(LIBMAKEMKV_INC) \
 	$(INCF)$(LIBDRIVEIO_INC) $(INCF)$(LIBABI_INC) $(MMGPL_DEF) -D_GNU_SOURCE -Dstl=std -o$@ $(MMGPL_SRC) $(MMGPL_SRC_LINUX) -lc -lstdc++ \
 	-ffunction-sections -Wl,--gc-sections -Wl,-z,defs
 
