@@ -452,7 +452,7 @@ int __cdecl ffm_audio_encode_put_frame(FFM_AudioEncodeContext* ctx,const uint8_t
         ctx->frame->channel_layout = ctx->avctx->channel_layout;
 #else
         r = av_channel_layout_copy(&ctx->frame->ch_layout, &ctx->avctx->ch_layout);
-        if (!r) return r;
+        if (r!=0) return r;
         channels = ctx->avctx->ch_layout.nb_channels;
 #endif
         ctx->frame->nb_samples = nb_samples;

@@ -93,7 +93,7 @@ void CRegBox::SlotPurchase()
 
 void CRegBox::SlotLoadFile()
 {
-    QString filter = QLatin1String("*.txt *.eml *.pdf *.html *.htm");
+    QString filter = QLatin1String("*.txt *.eml *.msg *.pdf *.html *.htm");
 
     QString fileName = QFileDialog::getOpenFileName(this,
         UI_QSTRING(APP_IFACE_OPENFILE_TITLE),
@@ -159,6 +159,7 @@ static bool acceptFileName(const QString name)
     if (name.endsWith(QLatin1String(".htm"))) return true;
     if (name.endsWith(QLatin1String(".html"))) return true;
     if (name.endsWith(QLatin1String(".eml"))) return true;
+    if (name.endsWith(QLatin1String(".msg"))) return true;
     if (name.endsWith(QLatin1String(".pdf"))) return true;
     return false;
 }

@@ -32,6 +32,10 @@
 
 #elif defined(_linux_)
 
+#ifndef __USE_MISC
+#define __USE_MISC 1	// for __bswap_xx
+#endif
+
 #include <endian.h>
 
 #define __bswap64(x)    __bswap_64(x)
@@ -70,131 +74,6 @@
 #define BYTEORDER_ARCH_ALLOWS_UNALIGNED_ACCESS 1
 #endif
 
-#ifdef BYTEORDER_ARCH_ALLOWS_UNALIGNED_ACCESS
-
-// arch allows unaligned access
-
-static inline uint16_t rd16ua(const uint8_t* Data)
-{
-    return *(const uint16_t*)Data;
-}
-
-static inline uint32_t rd32ua(const uint8_t* Data)
-{
-    return *(const uint32_t*)Data;
-}
-
-static inline uint64_t rd64ua(const uint8_t* Data)
-{
-    return *(const uint64_t*)Data;
-}
-
-static inline void wr16ua(uint8_t* Data,uint16_t Value)
-{
-    *((uint16_t*)Data) = Value;
-}
-
-static inline void wr32ua(uint8_t* Data,uint32_t Value)
-{
-    *((uint32_t*)Data) = Value;
-}
-
-static inline void wr64ua(uint8_t* Data,uint64_t Value)
-{
-    *((uint64_t*)Data) = Value;
-}
-
-#else
-
-// true unaligned
-
-static inline uint16_t rd16ua(const uint8_t* Data)
-{
-    uint16_t t;
-    if (0==(((unsigned int)(uintptr_t)(void*)Data)&1))
-    {
-        t = *(const uint16_t*)Data;
-    } else {
-        uint8_t* p = (uint8_t*)&t;
-        p[0]=Data[0];
-        p[1]=Data[1];
-    }
-    return t;
-}
-
-static inline uint32_t rd32ua(const uint8_t* Data)
-{
-    uint32_t t;
-    if (0==(((unsigned int)(uintptr_t)(void*)Data)&3))
-    {
-        t = *(const uint32_t*)Data;
-    } else {
-        uint8_t* p = (uint8_t*)&t;
-        p[0]=Data[0];
-        p[1]=Data[1];
-        p[2]=Data[2];
-        p[3]=Data[3];
-    }
-    return t;
-}
-
-static inline uint64_t rd64ua(const uint8_t* Data)
-{
-    uint64_t t;
-    if (0==(((unsigned int)(uintptr_t)(void*)Data)&7))
-    {
-        t = *(const uint64_t*)Data;
-    } else {
-        uint8_t* p = (uint8_t*)&t;
-        p[0]=Data[0];
-        p[1]=Data[1];
-        p[2]=Data[2];
-        p[3]=Data[3];
-        p[4]=Data[4];
-        p[5]=Data[5];
-        p[6]=Data[6];
-        p[7]=Data[7];
-    }
-    return t;
-}
-
-static inline void wr16ua(uint8_t* Data,uint16_t Value)
-{
-    uint16_t t = Value;
-    const uint8_t* p = (uint8_t*)&t;
-
-    Data[0]=p[0];
-    Data[1]=p[1];
-}
-
-static inline void wr32ua(uint8_t* Data,uint32_t Value)
-{
-    uint32_t t = Value;
-    const uint8_t* p = (uint8_t*)&t;
-
-    Data[0]=p[0];
-    Data[1]=p[1];
-    Data[2]=p[2];
-    Data[3]=p[3];
-}
-
-static inline void wr64ua(uint8_t* Data,uint64_t Value)
-{
-    uint64_t t = Value;
-    const uint8_t* p = (uint8_t*)&t;
-
-    Data[0]=p[0];
-    Data[1]=p[1];
-    Data[2]=p[2];
-    Data[3]=p[3];
-    Data[4]=p[4];
-    Data[5]=p[5];
-    Data[6]=p[6];
-    Data[7]=p[7];
-}
-
-#endif
-
 #if _BYTE_ORDER == _LITTLE_ENDIAN
 
 #define bswap_cpu_to_le64(x) (x)
@@ -225,6 +104,39 @@ static inline void wr64ua(uint8_t* Data,uint64_t Value)
 #define bswap_be32_to_cpu bswap_cpu_to_be32
 #define bswap_be16_to_cpu bswap_cpu_to_be16
 
+#ifdef BYTEORDER_ARCH_ALLOWS_UNALIGNED_ACCESS
+
+// arch allows unaligned access
+
+static inline uint16_t rd16ua(const uint8_t* Data)
+{
+    return *(const uint16_t*)Data;
+}
+
+static inline uint32_t rd32ua(const uint8_t* Data)
+{
+    return *(const uint32_t*)Data;
+}
+
+static inline uint64_t rd64ua(const uint8_t* Data)
+{
+    return *(const uint64_t*)Data;
+}
+
+static inline void wr16ua(uint8_t* Data, uint16_t Value)
+{
+    *((uint16_t*)Data) = Value;
+}
+
+static inline void wr32ua(uint8_t* Data, uint32_t Value)
+{
+    *((uint32_t*)Data) = Value;
+}
+
+static inline void wr64ua(uint8_t* Data, uint64_t Value)
+{
+    *((uint64_t*)Data) = Value;
+}
 
 // inline big-endian access macros
 
@@ -290,6 +202,129 @@ static inline void wr64le(uint8_t* Data,uint64_t Value)
     wr64ua(Data, bswap_cpu_to_le64(Value));
 }
 
+#else // BYTEORDER_ARCH_ALLOWS_UNALIGNED_ACCESS
+
+// inline big-endian access macros
+
+static inline uint16_t rd16be(const uint8_t* Data)
+{
+    uint16_t v;
+    v  = ((uint16_t)Data[0]) << (1 * 8);
+    v |= ((uint16_t)Data[1]) << (0 * 8);
+    return v;
+}
+
+static inline uint32_t rd32be(const uint8_t* Data)
+{
+    uint32_t v;
+    v  = ((uint32_t)Data[0]) << (3 * 8);
+    v |= ((uint32_t)Data[1]) << (2 * 8);
+    v |= ((uint32_t)Data[2]) << (1 * 8);
+    v |= ((uint32_t)Data[3]) << (0 * 8);
+    return v;
+}
+
+static inline uint64_t rd64be(const uint8_t* Data)
+{
+    uint64_t v;
+    v  = ((uint64_t)Data[0]) << (7 * 8);
+    v |= ((uint64_t)Data[1]) << (6 * 8);
+    v |= ((uint64_t)Data[2]) << (5 * 8);
+    v |= ((uint64_t)Data[3]) << (4 * 8);
+    v |= ((uint64_t)Data[4]) << (3 * 8);
+    v |= ((uint64_t)Data[5]) << (2 * 8);
+    v |= ((uint64_t)Data[6]) << (1 * 8);
+    v |= ((uint64_t)Data[7]) << (0 * 8);
+    return v;
+}
+
+static inline void wr16be(uint8_t* Data, uint16_t Value)
+{
+    Data[0] = (uint8_t)(Value >> (1 * 8));
+    Data[1] = (uint8_t)(Value >> (0 * 8));
+}
+
+static inline void wr32be(uint8_t* Data, uint32_t Value)
+{
+    Data[0] = (uint8_t)(Value >> (3 * 8));
+    Data[1] = (uint8_t)(Value >> (2 * 8));
+    Data[2] = (uint8_t)(Value >> (1 * 8));
+    Data[3] = (uint8_t)(Value >> (0 * 8));
+}
+
+static inline void wr64be(uint8_t* Data, uint64_t Value)
+{
+    Data[0] = (uint8_t)(Value >> (7 * 8));
+    Data[1] = (uint8_t)(Value >> (6 * 8));
+    Data[2] = (uint8_t)(Value >> (5 * 8));
+    Data[3] = (uint8_t)(Value >> (4 * 8));
+    Data[4] = (uint8_t)(Value >> (3 * 8));
+    Data[5] = (uint8_t)(Value >> (2 * 8));
+    Data[6] = (uint8_t)(Value >> (1 * 8));
+    Data[7] = (uint8_t)(Value >> (0 * 8));
+}
+
+// inline little-endian access macros
+
+static inline uint16_t rd16le(const uint8_t* Data)
+{
+    uint16_t v;
+    v  = ((uint16_t)Data[0]) << (0 * 8);
+    v |= ((uint16_t)Data[1]) << (1 * 8);
+    return v;
+}
+
+static inline uint32_t rd32le(const uint8_t* Data)
+{
+    uint32_t v;
+    v  = ((uint32_t)Data[0]) << (0 * 8);
+    v |= ((uint32_t)Data[1]) << (1 * 8);
+    v |= ((uint32_t)Data[2]) << (2 * 8);
+    v |= ((uint32_t)Data[3]) << (3 * 8);
+    return v;
+}
+
+static inline uint64_t rd64le(const uint8_t* Data)
+{
+    uint64_t v;
+    v  = ((uint64_t)Data[0]) << (0 * 8);
+    v |= ((uint64_t)Data[1]) << (1 * 8);
+    v |= ((uint64_t)Data[2]) << (2 * 8);
+    v |= ((uint64_t)Data[3]) << (3 * 8);
+    v |= ((uint64_t)Data[4]) << (4 * 8);
+    v |= ((uint64_t)Data[5]) << (5 * 8);
+    v |= ((uint64_t)Data[6]) << (6 * 8);
+    v |= ((uint64_t)Data[7]) << (7 * 8);
+    return v;
+}
+
+static inline void wr16le(uint8_t* Data, uint16_t Value)
+{
+    Data[0] = (uint8_t)(Value >> (0 * 8));
+    Data[1] = (uint8_t)(Value >> (1 * 8));
+}
+
+static inline void wr32le(uint8_t* Data, uint32_t Value)
+{
+    Data[0] = (uint8_t)(Value >> (0 * 8));
+    Data[1] = (uint8_t)(Value >> (1 * 8));
+    Data[2] = (uint8_t)(Value >> (2 * 8));
+    Data[3] = (uint8_t)(Value >> (3 * 8));
+}
+
+static inline void wr64le(uint8_t* Data, uint64_t Value)
+{
+    Data[0] = (uint8_t)(Value >> (0 * 8));
+    Data[1] = (uint8_t)(Value >> (1 * 8));
+    Data[2] = (uint8_t)(Value >> (2 * 8));
+    Data[3] = (uint8_t)(Value >> (3 * 8));
+    Data[4] = (uint8_t)(Value >> (4 * 8));
+    Data[5] = (uint8_t)(Value >> (5 * 8));
+    Data[6] = (uint8_t)(Value >> (6 * 8));
+    Data[7] = (uint8_t)(Value >> (7 * 8));
+}
+
+#endif // BYTEORDER_ARCH_ALLOWS_UNALIGNED_ACCESS
 
 #endif // LGPL_BYTEORDER_H_INCLUDED
 
