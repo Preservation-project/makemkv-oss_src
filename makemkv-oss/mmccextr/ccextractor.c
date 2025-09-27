@@ -8,6 +8,8 @@ License: GPL 2.0
 #include <locale.h>
 
 volatile int terminate_asap = 0;
+struct ccx_s_options ccx_options;
+struct lib_ccx_ctx *signal_ctx;
 
 void sigusr1_handler(int sig)
 {
